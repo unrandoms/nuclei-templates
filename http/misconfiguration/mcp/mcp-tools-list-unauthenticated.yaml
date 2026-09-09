@@ -1,0 +1,70 @@
+id: mcp-tools-list-unauthenticated
+
+info:
+  name: MCP Server - Unauthenticated tools/list Exposure
+  author: chipo
+  severity: high
+  description: |
+    The Model Context Protocol server exposes the tools/list endpoint without authentication,
+    allowing enumeration of all available tools and their input schemas. This may expose
+    sensitive capabilities including file system access, code execution, and internal API access.
+  reference:
+    - https://github.com/projectdiscovery/nuclei-templates/issues/16735
+    - https://spec.modelcontextprotocol.io/
+  classification:
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N
+    cvss-score: 7.5
+    cwe-id: CWE-306
+  metadata:
+    verified: true
+    max-request: 4
+  tags: mcp,llm,auth,unauth,exposure,api,misconfig
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/mcp"
+      - "{{BaseURL}}/messages"
+      - "{{BaseURL}}/sse"
+      - "{{BaseURL}}/"
+
+    headers:
+      Content-Type: application/json
+
+    body: '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - '"jsonrpc"'
+          - '"result"'
+        condition: and
+
+      - type: word
+        part: body
+        words:
+          - '"tools"'
+          - '"inputSchema"'
+        condition: or
+
+      - type: word
+        part: body
+        words:
+          - '"error"'
+          - '"Unauthorized"'
+          - '"Authentication required"'
+        negative: true
+        condition: or
+
+      - type: status
+        status:
+          - 200
+
+    extractors:
+      - type: regex
+        part: body
+        name: tool_names
+        regex:
+          - '"name":"([^"]+)"'
